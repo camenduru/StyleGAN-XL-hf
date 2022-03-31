@@ -23,7 +23,28 @@ DESCRIPTION = f'''This is a demo for {ORIGINAL_REPO_URL}.
 For class-conditional models, you can specify the class index.
 Index-to-label dictionaries for ImageNet and CIFAR-10 can be found [here](https://raw.githubusercontent.com/autonomousvision/stylegan_xl/main/misc/imagenet_idx2labels.txt) and [here](https://www.cs.toronto.edu/~kriz/cifar.html), respectively.
 '''
-ARTICLE = None
+SAMPLE_IMAGE_DIR = 'https://huggingface.co/spaces/hysts/StyleGAN-XL/resolve/main/samples'
+ARTICLE = f'''## Generated images
+- truncation: 0.7
+### ImageNet
+- size: 128x128
+- class index: 0-999
+- seed: 0
+![ImageNet samples]({SAMPLE_IMAGE_DIR}/imagenet.jpg)
+### CIFAR-10
+- size: 32x32
+- class index: 0-9
+- seed: 0-9
+![CIFAR-10 samples]({SAMPLE_IMAGE_DIR}/cifar10.jpg)
+### FFHQ
+- size: 256x256
+- seed: 0-99
+![HHFQ samples]({SAMPLE_IMAGE_DIR}/ffhq.jpg)
+### Pokemon
+- size: 256x256
+- seed: 0-99
+![Pokemon samples]({SAMPLE_IMAGE_DIR}/pokemon.jpg)
+'''
 
 TOKEN = os.environ['TOKEN']
 
@@ -128,12 +149,10 @@ def main():
     gr.Interface(
         func,
         [
-            gr.inputs.Radio(
-                model_names,
-                type='value',
-                default='imagenet128',
-                label='Model',
-            ),
+            gr.inputs.Radio(model_names,
+                            type='value',
+                            default='imagenet128',
+                            label='Model'),
             gr.inputs.Number(default=284, label='Class index'),
             gr.inputs.Number(default=0, label='Seed'),
             gr.inputs.Slider(
