@@ -39,7 +39,7 @@ ARTICLE = f'''## Generated images
 ### FFHQ
 - size: 256x256
 - seed: 0-99
-![HHFQ samples]({SAMPLE_IMAGE_DIR}/ffhq.jpg)
+![FFHQ samples]({SAMPLE_IMAGE_DIR}/ffhq.jpg)
 ### Pokemon
 - size: 256x256
 - seed: 0-99
