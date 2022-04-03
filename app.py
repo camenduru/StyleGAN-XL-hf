@@ -77,9 +77,9 @@ def make_transform(translate: tuple[float, float], angle: float) -> np.ndarray:
     return mat
 
 
-def generate_z(seed: int, device: torch.device) -> torch.Tensor:
-    return torch.from_numpy(np.random.RandomState(seed).randn(1,
-                                                              64)).to(device)
+def generate_z(z_dim: int, seed: int, device: torch.device) -> torch.Tensor:
+    return torch.from_numpy(np.random.RandomState(seed).randn(
+        1, z_dim)).to(device).float()
 
 
 @torch.inference_mode()
@@ -90,7 +90,7 @@ def generate_image(model_name: str, class_index: int, seed: int,
     model = model_dict[model_name]
     seed = int(np.clip(seed, 0, np.iinfo(np.uint32).max))
 
-    z = generate_z(seed, device)
+    z = generate_z(model.z_dim, seed, device)
 
     label = torch.zeros([1, model.c_dim], device=device)
     class_index = round(class_index)
@@ -117,7 +117,7 @@ def load_model(model_name: str, device: torch.device) -> nn.Module:
     model.eval()
     model.to(device)
     with torch.inference_mode():
-        z = torch.zeros((1, 64)).to(device)
+        z = torch.zeros((1, model.z_dim)).to(device)
         label = torch.zeros([1, model.c_dim], device=device)
         model(z, label)
     return model
