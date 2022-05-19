@@ -16,12 +16,13 @@ from huggingface_hub import hf_hub_download
 
 sys.path.insert(0, 'stylegan_xl')
 
-ORIGINAL_REPO_URL = 'https://github.com/autonomousvision/stylegan_xl'
 TITLE = 'autonomousvision/stylegan_xl'
-DESCRIPTION = f'''This is a demo for {ORIGINAL_REPO_URL}.
+DESCRIPTION = '''This is an unofficial demo for https://github.com/autonomousvision/stylegan_xl.
 
 For class-conditional models, you can specify the class index.
 Index-to-label dictionaries for ImageNet and CIFAR-10 can be found [here](https://raw.githubusercontent.com/autonomousvision/stylegan_xl/main/misc/imagenet_idx2labels.txt) and [here](https://www.cs.toronto.edu/~kriz/cifar.html), respectively.
+
+Expected execution time on Hugging Face Spaces: 16s
 '''
 SAMPLE_IMAGE_DIR = 'https://huggingface.co/spaces/hysts/StyleGAN-XL/resolve/main/samples'
 ARTICLE = f'''## Generated images
@@ -44,6 +45,8 @@ ARTICLE = f'''## Generated images
 - size: 256x256
 - seed: 0-99
 ![Pokemon samples]({SAMPLE_IMAGE_DIR}/pokemon.jpg)
+
+<center><img src="https://visitor-badge.glitch.me/badge?page_id=hysts.stylegan-xl" alt="visitor badge"/></center>
 '''
 
 TOKEN = os.environ['TOKEN']
