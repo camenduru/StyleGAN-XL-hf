@@ -1,5 +1,5 @@
 ---
-title: StyleGAN XL
+title: StyleGAN-XL
 emoji: 🏃
 colorFrom: red
 colorTo: purple
