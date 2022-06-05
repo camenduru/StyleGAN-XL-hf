@@ -3,172 +3,230 @@
 from __future__ import annotations
 
 import argparse
-import functools
-import os
-import pickle
-import sys
+import json
 
 import gradio as gr
 import numpy as np
-import torch
-import torch.nn as nn
-from huggingface_hub import hf_hub_download
 
-sys.path.insert(0, 'stylegan_xl')
+from model import Model
 
-TITLE = 'autonomousvision/stylegan_xl'
-DESCRIPTION = '''This is an unofficial demo for https://github.com/autonomousvision/stylegan_xl.
-
-For class-conditional models, you can specify the class index.
-Index-to-label dictionaries for ImageNet and CIFAR-10 can be found [here](https://raw.githubusercontent.com/autonomousvision/stylegan_xl/main/misc/imagenet_idx2labels.txt) and [here](https://www.cs.toronto.edu/~kriz/cifar.html), respectively.
+TITLE = '# autonomousvision/stylegan_xl'
+DESCRIPTION = '''This is an unofficial demo for [https://github.com/autonomousvision/stylegan_xl](https://github.com/autonomousvision/stylegan_xl).
 
 Expected execution time on Hugging Face Spaces: 16s
 '''
-SAMPLE_IMAGE_DIR = 'https://huggingface.co/spaces/hysts/StyleGAN-XL/resolve/main/samples'
-ARTICLE = f'''## Generated images
-- truncation: 0.7
-### ImageNet
-- size: 128x128
-- class index: 0-999
-- seed: 0
-![ImageNet samples]({SAMPLE_IMAGE_DIR}/imagenet.jpg)
-### CIFAR-10
-- size: 32x32
-- class index: 0-9
-- seed: 0-9
-![CIFAR-10 samples]({SAMPLE_IMAGE_DIR}/cifar10.jpg)
-### FFHQ
-- size: 256x256
-- seed: 0-99
-![FFHQ samples]({SAMPLE_IMAGE_DIR}/ffhq.jpg)
-### Pokemon
-- size: 256x256
-- seed: 0-99
-![Pokemon samples]({SAMPLE_IMAGE_DIR}/pokemon.jpg)
-
-<center><img src="https://visitor-badge.glitch.me/badge?page_id=hysts.stylegan-xl" alt="visitor badge"/></center>
-'''
-
-TOKEN = os.environ['TOKEN']
+FOOTER = '<img id="visitor-badge" src="https://visitor-badge.glitch.me/badge?page_id=hysts.stylegan-xl" alt="visitor badge" />'
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument('--device', type=str, default='cpu')
     parser.add_argument('--theme', type=str)
-    parser.add_argument('--live', action='store_true')
     parser.add_argument('--share', action='store_true')
     parser.add_argument('--port', type=int)
     parser.add_argument('--disable-queue',
                         dest='enable_queue',
                         action='store_false')
-    parser.add_argument('--allow-flagging', type=str, default='never')
     return parser.parse_args()
 
 
-def make_transform(translate: tuple[float, float], angle: float) -> np.ndarray:
-    mat = np.eye(3)
-    sin = np.sin(angle / 360 * np.pi * 2)
-    cos = np.cos(angle / 360 * np.pi * 2)
-    mat[0][0] = cos
-    mat[0][1] = sin
-    mat[0][2] = translate[0]
-    mat[1][0] = -sin
-    mat[1][1] = cos
-    mat[1][2] = translate[1]
-    return mat
+def update_class_index(name: str) -> dict:
+    if 'imagenet' in name:
+        return gr.Slider.update(maximum=999, visible=True)
+    elif 'cifar' in name:
+        return gr.Slider.update(maximum=9, visible=True)
+    else:
+        return gr.Slider.update(visible=False)
 
 
-def generate_z(z_dim: int, seed: int, device: torch.device) -> torch.Tensor:
-    return torch.from_numpy(np.random.RandomState(seed).randn(
-        1, z_dim)).to(device).float()
+def get_sample_image_url(name: str) -> str:
+    sample_image_dir = 'https://huggingface.co/spaces/hysts/StyleGAN-XL/resolve/main/samples'
+    return f'{sample_image_dir}/{name}.jpg'
 
 
-@torch.inference_mode()
-def generate_image(model_name: str, class_index: int, seed: int,
-                   truncation_psi: float, tx: float, ty: float, angle: float,
-                   model_dict: dict[str, nn.Module],
-                   device: torch.device) -> np.ndarray:
-    model = model_dict[model_name]
-    seed = int(np.clip(seed, 0, np.iinfo(np.uint32).max))
+def get_sample_image_markdown(name: str) -> str:
+    url = get_sample_image_url(name)
+    if name == 'imagenet':
+        size = 128
+        class_index = '0-999'
+        seed = '0'
+    elif name == 'cifar10':
+        size = 32
+        class_index = '0-9'
+        seed = '0'
+    elif name == 'ffhq':
+        size = 256
+        class_index = 'N/A'
+        seed = '0-99'
+    elif name == 'pokemon':
+        size = 256
+        class_index = 'N/A'
+        seed = '0-99'
+    else:
+        raise ValueError
 
-    z = generate_z(model.z_dim, seed, device)
-
-    label = torch.zeros([1, model.c_dim], device=device)
-    class_index = round(class_index)
-    class_index = min(max(0, class_index), model.c_dim - 1)
-    class_index = torch.tensor(class_index, dtype=torch.long)
-    if class_index >= 0:
-        label[:, class_index] = 1
-
-    mat = make_transform((tx, ty), angle)
-    mat = np.linalg.inv(mat)
-    model.synthesis.input.transform.copy_(torch.from_numpy(mat))
-
-    out = model(z, label, truncation_psi=truncation_psi)
-    out = (out.permute(0, 2, 3, 1) * 127.5 + 128).clamp(0, 255).to(torch.uint8)
-    return out[0].cpu().numpy()
+    return f'''
+    - size: {size}x{size}
+    - class_index: {class_index}
+    - seed: {seed}
+    - truncation: 0.7
+    ![sample images]({url})'''
 
 
-def load_model(model_name: str, device: torch.device) -> nn.Module:
-    path = hf_hub_download('hysts/StyleGAN-XL',
-                           f'models/{model_name}.pkl',
-                           use_auth_token=TOKEN)
-    with open(path, 'rb') as f:
-        model = pickle.load(f)['G_ema']
-    model.eval()
-    model.to(device)
-    with torch.inference_mode():
-        z = torch.zeros((1, model.z_dim)).to(device)
-        label = torch.zeros([1, model.c_dim], device=device)
-        model(z, label)
-    return model
+def load_class_names(name: str) -> list[str]:
+    with open(f'labels/{name}_classes.json') as f:
+        names = json.load(f)
+    return names
+
+
+def get_class_name_df(name: str) -> list:
+    names = load_class_names(name)
+    return list(map(list, enumerate(names)))  # type: ignore
+
+
+IMAGENET_NAMES = load_class_names('imagenet')
+CIFAR10_NAMES = load_class_names('cifar10')
+
+
+def update_class_name(model_name: str, index: int) -> dict:
+    if 'imagenet' in model_name:
+        if index < len(IMAGENET_NAMES):
+            value = IMAGENET_NAMES[index]
+        else:
+            value = '-'
+        return gr.Textbox.update(value=value, visible=True)
+    elif 'cifar' in model_name:
+        if index < len(CIFAR10_NAMES):
+            value = CIFAR10_NAMES[index]
+        else:
+            value = '-'
+        return gr.Textbox.update(value=value, visible=True)
+    else:
+        return gr.Textbox.update(visible=False)
 
 
 def main():
     args = parse_args()
-    device = torch.device(args.device)
+    model = Model(args.device)
 
-    model_names = [
-        'imagenet16',
-        'imagenet32',
-        'imagenet64',
-        'imagenet128',
-        'cifar10',
-        'ffhq256',
-        'pokemon256',
-    ]
+    with gr.Blocks(theme=args.theme, css='style.css') as demo:
+        gr.Markdown(TITLE)
+        gr.Markdown(DESCRIPTION)
 
-    model_dict = {name: load_model(name, device) for name in model_names}
+        with gr.Tabs():
+            with gr.TabItem('App'):
+                with gr.Row():
+                    with gr.Column():
+                        with gr.Group():
+                            model_name = gr.Dropdown(
+                                model.MODEL_NAMES,
+                                value=model.MODEL_NAMES[3],
+                                label='Model')
+                            seed = gr.Slider(0,
+                                             np.iinfo(np.uint32).max,
+                                             step=1,
+                                             value=0,
+                                             label='Seed')
+                            psi = gr.Slider(0,
+                                            2,
+                                            step=0.05,
+                                            value=0.7,
+                                            label='Truncation psi')
+                            class_index = gr.Slider(0,
+                                                    999,
+                                                    step=1,
+                                                    value=83,
+                                                    label='Class Index')
+                            class_name = gr.Textbox(
+                                value=IMAGENET_NAMES[class_index.value],
+                                label='Class Label',
+                                interactive=False)
+                            tx = gr.Slider(-1,
+                                           1,
+                                           step=0.05,
+                                           value=0,
+                                           label='Translate X')
+                            ty = gr.Slider(-1,
+                                           1,
+                                           step=0.05,
+                                           value=0,
+                                           label='Translate Y')
+                            angle = gr.Slider(-180,
+                                              180,
+                                              step=5,
+                                              value=0,
+                                              label='Angle')
+                            run_button = gr.Button('Run')
+                    with gr.Column():
+                        result = gr.Image(label='Result', elem_id='result')
 
-    func = functools.partial(generate_image,
-                             model_dict=model_dict,
-                             device=device)
-    func = functools.update_wrapper(func, generate_image)
+            with gr.TabItem('Sample Images'):
+                with gr.Row():
+                    model_name2 = gr.Dropdown([
+                        'imagenet',
+                        'cifar10',
+                        'ffhq',
+                        'pokemon',
+                    ],
+                                              value='imagenet',
+                                              label='Model')
+                with gr.Row():
+                    text = get_sample_image_markdown(model_name2.value)
+                    sample_images = gr.Markdown(text)
 
-    gr.Interface(
-        func,
-        [
-            gr.inputs.Radio(model_names,
-                            type='value',
-                            default='imagenet128',
-                            label='Model'),
-            gr.inputs.Number(default=284, label='Class index'),
-            gr.inputs.Number(default=0, label='Seed'),
-            gr.inputs.Slider(
-                0, 2, step=0.05, default=0.7, label='Truncation psi'),
-            gr.inputs.Slider(-1, 1, step=0.05, default=0, label='Translate X'),
-            gr.inputs.Slider(-1, 1, step=0.05, default=0, label='Translate Y'),
-            gr.inputs.Slider(-180, 180, step=5, default=0, label='Angle'),
-        ],
-        gr.outputs.Image(type='numpy', label='Output'),
-        title=TITLE,
-        description=DESCRIPTION,
-        article=ARTICLE,
-        theme=args.theme,
-        allow_flagging=args.allow_flagging,
-        live=args.live,
-    ).launch(
+            with gr.TabItem('Class Names'):
+                with gr.Row():
+                    dataset_name = gr.Dropdown([
+                        'imagenet',
+                        'cifar10',
+                    ],
+                                               value='imagenet',
+                                               label='Dataset')
+                with gr.Row():
+                    df = get_class_name_df('imagenet')
+                    class_names = gr.Dataframe(
+                        df,
+                        col_count=2,
+                        headers=['Class Index', 'Label'],
+                        interactive=False)
+
+        gr.Markdown(FOOTER)
+
+        model_name.change(fn=model.set_model, inputs=model_name, outputs=None)
+        model_name.change(fn=update_class_index,
+                          inputs=model_name,
+                          outputs=class_index)
+        model_name.change(fn=update_class_name,
+                          inputs=[
+                              model_name,
+                              class_index,
+                          ],
+                          outputs=class_name)
+        class_index.change(fn=update_class_name,
+                           inputs=[
+                               model_name,
+                               class_index,
+                           ],
+                           outputs=class_name)
+        run_button.click(fn=model.set_model_and_generate_image,
+                         inputs=[
+                             model_name,
+                             seed,
+                             psi,
+                             class_index,
+                             tx,
+                             ty,
+                             angle,
+                         ],
+                         outputs=result)
+        model_name2.change(fn=get_sample_image_markdown,
+                           inputs=model_name2,
+                           outputs=sample_images)
+        dataset_name.change(fn=get_class_name_df,
+                            inputs=dataset_name,
+                            outputs=class_names)
+
+    demo.launch(
         enable_queue=args.enable_queue,
         server_port=args.port,
         share=args.share,
