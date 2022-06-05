@@ -53,7 +53,7 @@ def get_sample_image_markdown(name: str) -> str:
     elif name == 'cifar10':
         size = 32
         class_index = '0-9'
-        seed = '0'
+        seed = '0-9'
     elif name == 'ffhq':
         size = 256
         class_index = 'N/A'
