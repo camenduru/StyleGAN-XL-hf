@@ -10,7 +10,7 @@ import numpy as np
 
 from model import Model
 
-TITLE = '# autonomousvision/stylegan_xl'
+TITLE = '# StyleGAN-XL'
 DESCRIPTION = '''This is an unofficial demo for [https://github.com/autonomousvision/stylegan_xl](https://github.com/autonomousvision/stylegan_xl).
 
 Expected execution time on Hugging Face Spaces: 16s
