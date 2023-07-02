@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import pathlib
 import pickle
 import sys
@@ -13,8 +12,6 @@ from huggingface_hub import hf_hub_download
 current_dir = pathlib.Path(__file__).parent
 submodule_dir = current_dir / 'stylegan_xl'
 sys.path.insert(0, submodule_dir.as_posix())
-
-HF_TOKEN = os.environ['HF_TOKEN']
 
 
 class Model:
@@ -29,16 +26,16 @@ class Model:
         'pokemon256',
     ]
 
-    def __init__(self, device: str | torch.device):
-        self.device = torch.device(device)
+    def __init__(self):
+        self.device = torch.device(
+            'cuda:0' if torch.cuda.is_available() else 'cpu')
         self._download_all_models()
         self.model_name = self.MODEL_NAMES[3]
         self.model = self._load_model(self.model_name)
 
     def _load_model(self, model_name: str) -> nn.Module:
-        path = hf_hub_download('hysts/StyleGAN-XL',
-                               f'models/{model_name}.pkl',
-                               use_auth_token=HF_TOKEN)
+        path = hf_hub_download('public-data/StyleGAN-XL',
+                               f'models/{model_name}.pkl')
         with open(path, 'rb') as f:
             model = pickle.load(f)['G_ema']
         model.eval()
